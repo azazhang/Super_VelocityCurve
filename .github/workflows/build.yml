@@ -1,0 +1,61 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package macOS artifacts
+        run: |
+          mkdir -p dist
+          cp -R "build/SuperVelocityCurve_artefacts/Release/AU/Super VelocityCurve.component" dist/
+          cp -R "build/SuperVelocityCurve_artefacts/Release/VST3/Super VelocityCurve.vst3" dist/
+          cp -R "build/SuperVelocityCurve_artefacts/Release/Standalone/Super VelocityCurve.app" dist/
+          cd dist && zip -r ../SuperVelocityCurve-macOS-unsigned.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuperVelocityCurve-macOS
+          path: SuperVelocityCurve-macOS-unsigned.zip
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Package Windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item -Recurse "build/SuperVelocityCurve_artefacts/Release/VST3/Super VelocityCurve.vst3" dist/
+          Copy-Item -Recurse "build/SuperVelocityCurve_artefacts/Release/Standalone/Super VelocityCurve.exe" dist/
+          Compress-Archive -Path dist/* -DestinationPath SuperVelocityCurve-Windows-unsigned.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SuperVelocityCurve-Windows
+          path: SuperVelocityCurve-Windows-unsigned.zip
