@@ -66,15 +66,25 @@ Audit-derived backlog. Status after v0.4 implementation.
 | T5 | Per-pad histogram test | **done** |
 | T6 | Launchpad 64-pad test | **done** |
 
+## Outstanding / next (v0.5+)
+
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| D4 | **Dual VST3 builds** | High | Instrument for Ableton + MIDI FX for Reaper/Bitwig/Logic AU — see README |
+| D5 | 16384-entry MIDI 2.0 LUT | Medium | Float pipeline ready |
+| D6 | CLAP format | Medium | Bitwig/Reaper native MIDI FX |
+| D7 | Phase 5 optional features | Low | Library compensation, zone routing, humanize |
+| D8 | Pre-built factory `.svcp` XML files | Low | Export from code templates |
+| D9 | Bundled virtual MIDI driver | Low | IAC/loopMIDI documented |
+| D10 | Installers / notarization | Low | Unsigned zip OK for now |
+| D11 | DAW test matrix docs | Medium | Logic, Reaper, Bitwig, Studio One |
+
 ## Intentional deviations (unchanged)
 
 | ID | Item | Notes |
 |----|------|-------|
-| D1 | Ableton Instrument workaround | Required for Live VST3 |
+| D1 | Ableton Instrument workaround (single VST today) | v0.5 will add second VST target |
 | D2 | Unsigned distribution | Free CI artifacts |
-| D3 | Phase 5 optional features | Library compensation, zone routing, humanize — post-launch |
-| D4 | True MIDI FX plugin type | Deferred; Ableton constraint |
-| D5 | 16384-entry MIDI 2.0 LUT | Foundation only; float pipeline in place |
 
 ## Validation (local)
 

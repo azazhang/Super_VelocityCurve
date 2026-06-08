@@ -68,18 +68,21 @@ jobs:
       - name: Run engine tests
         run: ctest --test-dir build -C Release --output-on-failure
 
-      - name: Install pluginval
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/Tracktion/pluginval/releases/download/1.0.3/pluginval_Windows.zip" -OutFile pluginval.zip
-          Expand-Archive -Path pluginval.zip -DestinationPath pluginval_dir -Force
-
       - name: Validate VST3 (pluginval)
         continue-on-error: true
         shell: pwsh
         run: |
-          $pv = Get-ChildItem -Path pluginval_dir -Recurse -Filter pluginval.exe | Select-Object -First 1
-          & $pv.FullName --validate-in-process --strictness-level 5 --timeout-ms 120000 "build/SuperVelocityCurve_artefacts/Release/VST3/Super VelocityCurve.vst3"
+          $release = "https://github.com/Tracktion/pluginval/releases/download/1.0.3"
+          try {
+            Invoke-WebRequest -Uri "$release/pluginval_Windows.zip" -OutFile pluginval.zip
+            Expand-Archive -Path pluginval.zip -DestinationPath pluginval_dir -Force
+            $pv = Get-ChildItem -Path pluginval_dir -Recurse -Filter pluginval.exe | Select-Object -First 1
+            if ($pv) {
+              & $pv.FullName --validate-in-process --strictness-level 5 --timeout-ms 120000 "build/SuperVelocityCurve_artefacts/Release/VST3/Super VelocityCurve.vst3"
+            } else { Write-Host "pluginval.exe not found; skipping validation" }
+          } catch {
+            Write-Host "pluginval install/validate skipped: $_"
+          }
 
       - name: Package Windows artifacts
         shell: pwsh
