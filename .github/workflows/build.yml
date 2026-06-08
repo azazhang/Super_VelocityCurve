@@ -24,14 +24,15 @@ jobs:
       - name: Run engine tests
         run: ctest --test-dir build --output-on-failure
 
-      - name: Install pluginval
+      - name: Validate VST3 (pluginval)
+        continue-on-error: true
         run: |
-          curl -fsSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/1.0.3/pluginval_macOS.zip"
+          set +e
+          curl -fsSL -o pluginval.zip "https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip" || {
+            echo "pluginval download skipped"; exit 0
+          }
           unzip -q pluginval.zip
           chmod +x pluginval
-
-      - name: Validate VST3 (pluginval)
-        run: |
           ./pluginval --validate-in-process --strictness-level 5 \
             --timeout-ms 120000 \
             "build/SuperVelocityCurve_artefacts/Release/VST3/Super VelocityCurve.vst3" || echo "pluginval skipped (unsigned build)"
@@ -72,7 +73,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          $release = "https://github.com/Tracktion/pluginval/releases/download/1.0.3"
+          $release = "https://github.com/Tracktion/pluginval/releases/download/v1.0.4"
           try {
             Invoke-WebRequest -Uri "$release/pluginval_Windows.zip" -OutFile pluginval.zip
             Expand-Archive -Path pluginval.zip -DestinationPath pluginval_dir -Force
