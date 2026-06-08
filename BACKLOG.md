@@ -90,4 +90,4 @@ Audit-derived backlog. Status after v0.4 implementation.
 
 - CMake Release build: **pass**
 - ctest (8 engine tests): **pass**
-- Version: **0.4.0**
+- Version: **0.4.1**
