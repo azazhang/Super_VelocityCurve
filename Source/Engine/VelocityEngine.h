@@ -19,27 +19,24 @@ struct PadSettings
     VelocityCurve curve;
     bool enabled = true;
     float velocityGate = 0.0f;
+    double retriggerGuardMs = 0.0;
 };
 
 class VelocityEngine
 {
 public:
-    static constexpr int maxNotes = 128;
-    static constexpr int maxChannels = 16;
-
     VelocityEngine();
 
+    void setSampleRate (double rate) noexcept;
     void setOutputMode (VelocityOutputMode mode) noexcept;
     VelocityOutputMode getOutputMode() const noexcept { return outputMode; }
 
+    void clearAllPads();
     void setPadSettings (int note, int channel, const PadSettings& settings);
     PadSettings getPadSettings (int note, int channel) const;
 
     void processMidiBuffer (juce::MidiBuffer& buffer, int numSamples);
     HitEventFifo& getHitFifo() noexcept { return hitFifo; }
-
-    void setRetriggerGuardMs (double ms) noexcept { retriggerGuardMs = ms; }
-    double getRetriggerGuardMs() const noexcept { return retriggerGuardMs; }
 
 private:
     struct NoteKey
@@ -61,22 +58,26 @@ private:
         }
     };
 
+    struct RetriggerState
+    {
+        double lastNoteOnTime = -1.0;
+    };
+
     using PadMap = std::unordered_map<NoteKey, PadSettings, NoteKeyHash>;
+    using RetriggerMap = std::unordered_map<NoteKey, RetriggerState, NoteKeyHash>;
 
     PadMap pads;
+    RetriggerMap retriggerStates;
     mutable std::shared_mutex padMutex;
     VelocityOutputMode outputMode = VelocityOutputMode::autoDetect;
     HitEventFifo hitFifo;
-    double retriggerGuardMs = 0.0;
     double sampleRate = 44100.0;
-    std::array<double, maxNotes> lastNoteOnTime {};
-    std::array<int, maxNotes> lastNoteOnChannel {};
+    double runningTimeSeconds = 0.0;
 
-    svc::PadSettings* findPad (int note, int channel);
-    const svc::PadSettings* findPad (int note, int channel) const;
-    float processNoteVelocity (const PadSettings& pad, float inputNormalized, bool inputIsMidi2) const;
+    const PadSettings* findPad (int note, int channel) const;
+    float processNoteVelocity (const PadSettings& pad, float inputNormalized) const;
     void applyOutputVelocity (juce::MidiMessage& message, float outputNormalized, bool inputIsMidi2) const;
-    bool shouldDropRetrigger (int note, int channel, double eventTimeSeconds) noexcept;
+    bool shouldDropRetrigger (const PadSettings& pad, int note, int channel, double eventTimeSeconds) noexcept;
 };
 
 } // namespace svc

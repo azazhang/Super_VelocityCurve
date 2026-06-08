@@ -7,14 +7,22 @@
 namespace svc
 {
 
+enum class CurvePreset
+{
+    linear,
+    soft,
+    hard,
+    sCurve,
+    exponential,
+    logarithmic
+};
+
 struct CurveControlPoint
 {
     float input = 0.0f;
     float output = 0.0f;
 };
 
-// Per-pad velocity curve stored as control points and a 128-entry runtime LUT.
-// High-resolution MIDI 2.0 input is mapped via normalized float + LUT interpolation.
 class VelocityCurve
 {
 public:
@@ -23,7 +31,8 @@ public:
     VelocityCurve();
 
     void setIdentity();
-    void setControlPoints (const std::vector<CurveControlPoint>& points);
+    void applyPreset (CurvePreset preset);
+    void setControlPoints (std::vector<CurveControlPoint> points);
     const std::vector<CurveControlPoint>& getControlPoints() const noexcept { return controlPoints; }
 
     void setFloor (float normalizedFloor) noexcept;
@@ -38,12 +47,15 @@ public:
 
     const std::array<uint8_t, lutSize>& getLut() const noexcept { return lut; }
 
+    static std::vector<CurveControlPoint> makePresetPoints (CurvePreset preset);
+
 private:
     std::vector<CurveControlPoint> controlPoints;
     std::array<uint8_t, lutSize> lut {};
     float floor = 0.0f;
     float ceiling = 1.0f;
 
+    static void sortControlPoints (std::vector<CurveControlPoint>& points);
     static float interpolateControlPoints (const std::vector<CurveControlPoint>& points, float input);
 };
 

@@ -1,18 +1,25 @@
 #include "VelocityEngine.h"
-#include <cmath>
 
 namespace svc
 {
 
-VelocityEngine::VelocityEngine()
+VelocityEngine::VelocityEngine() = default;
+
+void VelocityEngine::setSampleRate (double rate) noexcept
 {
-    lastNoteOnChannel.fill (0);
-    lastNoteOnTime.fill (-1.0);
+    sampleRate = rate > 0.0 ? rate : 44100.0;
 }
 
 void VelocityEngine::setOutputMode (VelocityOutputMode mode) noexcept
 {
     outputMode = mode;
+}
+
+void VelocityEngine::clearAllPads()
+{
+    const std::unique_lock lock (padMutex);
+    pads.clear();
+    retriggerStates.clear();
 }
 
 void VelocityEngine::setPadSettings (int note, int channel, const PadSettings& settings)
@@ -36,13 +43,6 @@ PadSettings VelocityEngine::getPadSettings (int note, int channel) const
     return defaults;
 }
 
-PadSettings* VelocityEngine::findPad (int note, int channel)
-{
-    const NoteKey key { note, channel };
-    const auto it = pads.find (key);
-    return it != pads.end() ? &it->second : nullptr;
-}
-
 const PadSettings* VelocityEngine::findPad (int note, int channel) const
 {
     const NoteKey key { note, channel };
@@ -50,25 +50,24 @@ const PadSettings* VelocityEngine::findPad (int note, int channel) const
     return it != pads.end() ? &it->second : nullptr;
 }
 
-bool VelocityEngine::shouldDropRetrigger (int note, int channel, double eventTimeSeconds) noexcept
+bool VelocityEngine::shouldDropRetrigger (const PadSettings& pad,
+                                          int note,
+                                          int channel,
+                                          double eventTimeSeconds) noexcept
 {
-    if (retriggerGuardMs <= 0.0)
+    if (pad.retriggerGuardMs <= 0.0)
         return false;
 
-    if (lastNoteOnChannel[static_cast<size_t> (note)] != channel)
+    const NoteKey key { note, channel };
+    const auto it = retriggerStates.find (key);
+    if (it == retriggerStates.end() || it->second.lastNoteOnTime < 0.0)
         return false;
 
-    const auto lastTime = lastNoteOnTime[static_cast<size_t> (note)];
-    if (lastTime < 0.0)
-        return false;
-
-    const auto guardSeconds = retriggerGuardMs * 0.001;
-    return (eventTimeSeconds - lastTime) < guardSeconds;
+    const auto guardSeconds = pad.retriggerGuardMs * 0.001;
+    return (eventTimeSeconds - it->second.lastNoteOnTime) < guardSeconds;
 }
 
-float VelocityEngine::processNoteVelocity (const PadSettings& pad,
-                                           float inputNormalized,
-                                           bool inputIsMidi2) const
+float VelocityEngine::processNoteVelocity (const PadSettings& pad, float inputNormalized) const
 {
     if (! pad.enabled)
         return inputNormalized;
@@ -84,13 +83,14 @@ void VelocityEngine::applyOutputVelocity (juce::MidiMessage& message,
                                           bool inputIsMidi2) const
 {
     const auto mode = outputMode;
-    const auto useMidi2 = mode == VelocityOutputMode::midi2
-                          || (mode == VelocityOutputMode::autoDetect && inputIsMidi2);
+    const auto forceMidi1 = mode == VelocityOutputMode::midi1;
+    const auto forceMidi2 = mode == VelocityOutputMode::midi2;
+    const auto useMidi1 = forceMidi1 || (! forceMidi2 && ! inputIsMidi2);
 
-    if (useMidi2)
+    if (useMidi1)
     {
-        // JUCE currently exposes velocity as normalized float; hosts upgrade to MIDI 2.0 as needed.
-        message.setVelocity (outputNormalized);
+        const auto midi1 = normalizedToMidi1 (outputNormalized);
+        message.setVelocity (midi1ToNormalized (midi1));
     }
     else
     {
@@ -102,7 +102,6 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
 {
     juce::MidiBuffer processed;
     const auto blockDurationSeconds = static_cast<double> (numSamples) / sampleRate;
-    static double runningTime = 0.0;
 
     std::shared_lock lock (padMutex);
 
@@ -110,7 +109,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
     {
         auto message = metadata.getMessage();
         const auto sampleOffset = metadata.samplePosition;
-        const auto eventTime = runningTime + (static_cast<double> (sampleOffset) / sampleRate);
+        const auto eventTime = runningTimeSeconds + (static_cast<double> (sampleOffset) / sampleRate);
 
         if (message.isNoteOn())
         {
@@ -118,20 +117,12 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             const auto channel = message.getChannel();
             const auto inputNormalized = message.getFloatVelocity();
 
-            // MIDI 2.0 detection: when JUCE exposes higher-resolution attributes on the message,
-            // treat non-quantized velocities as MIDI 2.0 for output-mode Auto.
             const auto midi1Quantized = midi1ToNormalized (message.getVelocity());
             const bool inputIsMidi2 = std::abs (inputNormalized - midi1Quantized) > (1.0f / 254.0f);
 
-            if (shouldDropRetrigger (note, channel, eventTime))
-                continue;
-
-            const auto* pad = findPad (note, channel);
             PadSettings settings;
-            if (pad != nullptr)
-            {
+            if (const auto* pad = findPad (note, channel))
                 settings = *pad;
-            }
             else
             {
                 settings.midiNote = note;
@@ -139,7 +130,10 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
                 settings.name = "Note " + juce::String (note);
             }
 
-            const auto outputNormalized = processNoteVelocity (settings, inputNormalized, inputIsMidi2);
+            if (shouldDropRetrigger (settings, note, channel, eventTime))
+                continue;
+
+            const auto outputNormalized = processNoteVelocity (settings, inputNormalized);
             if (outputNormalized < 0.0f)
                 continue;
 
@@ -154,8 +148,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
             hit.timestamp = static_cast<std::uint64_t> (eventTime * 1000.0);
             hitFifo.push (hit);
 
-            lastNoteOnTime[static_cast<size_t> (note)] = eventTime;
-            lastNoteOnChannel[static_cast<size_t> (note)] = channel;
+            retriggerStates[{ note, channel }].lastNoteOnTime = eventTime;
         }
 
         processed.addEvent (message, sampleOffset);
@@ -163,7 +156,7 @@ void VelocityEngine::processMidiBuffer (juce::MidiBuffer& buffer, int numSamples
 
     lock.unlock();
     buffer.swapWith (processed);
-    runningTime += blockDurationSeconds;
+    runningTimeSeconds += blockDurationSeconds;
 }
 
 } // namespace svc

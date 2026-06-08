@@ -1,5 +1,6 @@
 #include "VelocityCurve.h"
 #include <algorithm>
+#include <cmath>
 
 namespace svc
 {
@@ -11,31 +12,73 @@ VelocityCurve::VelocityCurve()
 
 void VelocityCurve::setIdentity()
 {
-    controlPoints = {
-        { 0.0f, 0.0f },
-        { 1.0f, 1.0f }
-    };
+    controlPoints = makePresetPoints (CurvePreset::linear);
     rebuildLut();
 }
 
-void VelocityCurve::setControlPoints (const std::vector<CurveControlPoint>& points)
+void VelocityCurve::applyPreset (CurvePreset preset)
 {
-    controlPoints = points;
-    if (controlPoints.size() < 2)
+    controlPoints = makePresetPoints (preset);
+    rebuildLut();
+}
+
+std::vector<CurveControlPoint> VelocityCurve::makePresetPoints (CurvePreset preset)
+{
+    switch (preset)
+    {
+        case CurvePreset::soft:
+            return { { 0.0f, 0.0f }, { 0.25f, 0.45f }, { 0.5f, 0.68f }, { 0.75f, 0.85f }, { 1.0f, 1.0f } };
+        case CurvePreset::hard:
+            return { { 0.0f, 0.0f }, { 0.35f, 0.12f }, { 0.65f, 0.55f }, { 1.0f, 1.0f } };
+        case CurvePreset::sCurve:
+            return { { 0.0f, 0.0f }, { 0.2f, 0.08f }, { 0.5f, 0.5f }, { 0.8f, 0.92f }, { 1.0f, 1.0f } };
+        case CurvePreset::exponential:
+            return { { 0.0f, 0.0f }, { 0.15f, 0.03f }, { 0.4f, 0.18f }, { 0.7f, 0.52f }, { 1.0f, 1.0f } };
+        case CurvePreset::logarithmic:
+            return { { 0.0f, 0.0f }, { 0.3f, 0.48f }, { 0.6f, 0.78f }, { 0.85f, 0.93f }, { 1.0f, 1.0f } };
+        case CurvePreset::linear:
+        default:
+            return { { 0.0f, 0.0f }, { 1.0f, 1.0f } };
+    }
+}
+
+void VelocityCurve::setControlPoints (std::vector<CurveControlPoint> points)
+{
+    if (points.size() < 2)
+    {
         setIdentity();
-    else
-        rebuildLut();
+        return;
+    }
+
+    sortControlPoints (points);
+    controlPoints = std::move (points);
+    rebuildLut();
+}
+
+void VelocityCurve::sortControlPoints (std::vector<CurveControlPoint>& points)
+{
+    std::sort (points.begin(), points.end(), [] (const CurveControlPoint& a, const CurveControlPoint& b)
+    {
+        return a.input < b.input;
+    });
+
+    points.front().input = 0.0f;
+    points.back().input = 1.0f;
 }
 
 void VelocityCurve::setFloor (float normalizedFloor) noexcept
 {
     floor = std::clamp (normalizedFloor, 0.0f, 1.0f);
+    if (floor > ceiling)
+        ceiling = floor;
     rebuildLut();
 }
 
 void VelocityCurve::setCeiling (float normalizedCeiling) noexcept
 {
     ceiling = std::clamp (normalizedCeiling, 0.0f, 1.0f);
+    if (ceiling < floor)
+        floor = ceiling;
     rebuildLut();
 }
 

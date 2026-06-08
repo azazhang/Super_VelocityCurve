@@ -55,8 +55,31 @@ ControllerProfile::ControllerProfile (juce::String profileName, ProfileLayout la
 {
 }
 
+void ControllerProfile::getGridDimensions (int& rows, int& cols) const noexcept
+{
+    rows = 1;
+    cols = 1;
+
+    for (const auto& pad : pads)
+    {
+        rows = std::max (rows, pad.gridRow + 1);
+        cols = std::max (cols, pad.gridCol + 1);
+    }
+}
+
+ControllerProfile ControllerProfile::copy() const
+{
+    ControllerProfile copy;
+    copy.name = name;
+    copy.layout = layout;
+    copy.pads = pads;
+    return copy;
+}
+
 void ControllerProfile::applyToEngine (VelocityEngine& engine) const
 {
+    engine.clearAllPads();
+
     for (const auto& pad : pads)
     {
         PadSettings settings;
@@ -66,6 +89,7 @@ void ControllerProfile::applyToEngine (VelocityEngine& engine) const
         settings.curve = pad.curve;
         settings.enabled = pad.enabled;
         settings.velocityGate = pad.velocityGate;
+        settings.retriggerGuardMs = pad.retriggerGuardMs;
         engine.setPadSettings (pad.midiNote, pad.midiChannel, settings);
     }
 }
@@ -86,6 +110,7 @@ juce::ValueTree ControllerProfile::toValueTree() const
         padTree.setProperty ("gridCol", pad.gridCol, nullptr);
         padTree.setProperty ("enabled", pad.enabled, nullptr);
         padTree.setProperty ("velocityGate", pad.velocityGate, nullptr);
+        padTree.setProperty ("retriggerGuardMs", pad.retriggerGuardMs, nullptr);
         padTree.appendChild (curveToTree (pad.curve), nullptr);
         tree.appendChild (padTree, nullptr);
     }
@@ -113,6 +138,7 @@ ControllerProfile ControllerProfile::fromValueTree (const juce::ValueTree& tree)
         pad.gridCol = padTree.getProperty ("gridCol", 0);
         pad.enabled = padTree.getProperty ("enabled", true);
         pad.velocityGate = padTree.getProperty ("velocityGate", 0.0f);
+        pad.retriggerGuardMs = padTree.getProperty ("retriggerGuardMs", 0.0);
 
         for (int c = 0; c < padTree.getNumChildren(); ++c)
         {

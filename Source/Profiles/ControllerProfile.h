@@ -27,6 +27,7 @@ struct ProfilePad
     VelocityCurve curve;
     bool enabled = true;
     float velocityGate = 0.0f;
+    double retriggerGuardMs = 0.0;
 };
 
 class ControllerProfile
@@ -36,12 +37,16 @@ public:
     explicit ControllerProfile (juce::String profileName, ProfileLayout layoutType);
 
     const juce::String& getName() const noexcept { return name; }
+    void setName (const juce::String& newName) { name = newName; }
     ProfileLayout getLayout() const noexcept { return layout; }
+    void setLayout (ProfileLayout newLayout) { layout = newLayout; }
 
     const std::vector<ProfilePad>& getPads() const noexcept { return pads; }
     std::vector<ProfilePad>& getPads() noexcept { return pads; }
 
+    void getGridDimensions (int& rows, int& cols) const noexcept;
     void applyToEngine (class VelocityEngine& engine) const;
+    ControllerProfile copy() const;
 
     juce::ValueTree toValueTree() const;
     static ControllerProfile fromValueTree (const juce::ValueTree& tree);
