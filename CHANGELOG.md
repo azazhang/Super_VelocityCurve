@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## v0.2.21 (2026-06-13)
+
+### Fixed
+- **macOS release zip:** Universal merge step now includes **Install Super Velocity Curve**, `install-macos.sh`, and `README.txt` (were dropped in v0.2.20 zip)
+
 ## v0.2.20 (2026-06-12)
 
 ### Fixed

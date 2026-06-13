@@ -61,4 +61,13 @@ do
   fi
 done
 
+# Installer assets are identical on both arches — copy from arm64 tree.
+for asset in install-macos.sh "Install Super Velocity Curve.command" README.txt; do
+  if [[ -e "$ARM64_DIST/$asset" ]]; then
+    cp "$ARM64_DIST/$asset" "$OUT_DIST/"
+  fi
+done
+chmod +x "$OUT_DIST/install-macos.sh" 2>/dev/null || true
+chmod +x "$OUT_DIST/Install Super Velocity Curve.command" 2>/dev/null || true
+
 echo "Universal dist written to $OUT_DIST"
